@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weather Graphics</title>
+
+<style>
+
+body{
+    margin:0;
+    overflow:hidden;
+    background:transparent;
+    font-family:Arial, Helvetica, sans-serif;
+    color:white;
+}
+
+/* LOWER THIRD */
+
+#lowerBar{
+    position:absolute;
+    bottom:0;
+    width:80%;
+    z-index:2;
+    height:90px;
+    display:flex;
+}
+
+/* LEFT WARNING TITLE */
+
+#warningTitle{
+    width:33%;
+    display:flex;
+    align-items:center;
+    padding-left:20px;
+    font-size:15px;
+    font-weight:bold;
+}
+
+/* VALID TIMES */
+
+#warningTimes{
+    width:50%;
+    display:flex;
+    align-items:center;
+    padding-left:25px;
+    font-size:16px;
+}
+
+/* CLOCK */
+
+#clock{
+    width:17%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:26px;
+    font-weight:bold;
+    background:rgba(0,0,0,0.4);
+}
+
+/* RIGHT PANEL */
+
+#rightPanel{
+    position:absolute;
+    top:0;
+    right:0;
+    z-index: 3;
+    width:20%;
+    height:100%;
+    background:rgba(40,40,40,0.95);
+    padding:0;
+    box-sizing:border-box;
+}
+
+#rightPanel h2{
+    margin:10px 0 10px 10px;
+}
+
+/* WARNING COUNT BLOCKS */
+
+.countBlock{
+    padding:8px;
+    margin:0;
+    font-size:20px;
+    font-weight:bold;
+}
+
+/* BASE COLOURS */
+
+.yellow{ 
+    background:#FFE923; 
+    color:black;
+}
+
+.amber{ 
+    background:#FF9900; 
+}
+
+.red{ 
+    background:#CC0033; 
+}
+
+
+/* DARK VERSIONS */
+
+.yellow-dark{
+    background:#BFAE00;
+    color:white;
+}
+
+.amber-dark{
+    background:#B36B00;
+}
+
+.red-dark{
+    background:#8A0022;
+}
+
+
+/* GRADIENT VERSIONS */
+
+.yellow-gradient{
+    background:linear-gradient(
+        90deg,
+        #FFF066 0%,
+        #FFE923 40%,
+        #D6C700 100%
+    );
+    color:black;
+}
+
+.amber-gradient{
+    background:linear-gradient(
+        90deg,
+        #FFB84D 0%,
+        #FF9900 40%,
+        #CC7700 100%
+    );
+}
+
+.red-gradient{
+    background:linear-gradient(
+        90deg,
+        #FF4D6D 0%,
+        #CC0033 40%,
+        #8A0022 100%
+    );
+}
+.sectionHeader{
+    margin-top:18px;
+    margin-left: 10px;
+    font-size:22px;
+    font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- RIGHT THIRD PANEL -->
+
+<div id="rightPanel">
+
+<h2>Warning Counts</h2>
+
+<div class="countBlock yellow-gradient">
+Yellow: <span id="yellowCount">0</span>
+</div>
+
+<div class="countBlock amber-gradient">
+Amber: <span id="amberCount">0</span>
+</div>
+
+<div class="countBlock red-gradient">
+Red: <span id="redCount">0</span>
+</div>
+
+<div class="sectionHeader">
+Live Webcams
+</div>
+
+</div>
+
+
+<!-- LOWER THIRD -->
+
+<div id="lowerBar">
+
+<div id="warningTitle">
+<span id="warningLevel">AMBER</span>&nbsp;
+<span id="warningType">RAIN</span>&nbsp;WARNING
+</div>
+
+<div id="warningTimes">
+Valid: <span id="validFrom">12:00 Fri</span> → <span id="validTo">18:00 Fri</span>
+</div>
+
+<div id="clock">
+<span id="time">00:00:00</span>
+</div>
+
+</div>
+
+
+<script>
+
+const API_URL = "https://services.arcgis.com/Lq3V5RFuTBC9I7kv/ArcGIS/rest/services/Met_Office_National_Severe_Weather_Warning_Service_Live/FeatureServer/0/query?where=1%3D1&outFields=warninglevel,weathertype,validFromDateString,validToDateString&f=json";
+
+/* COLOUR MAP */
+
+const levelColour = {
+    yellow:"#FFE923",
+    amber:"#FF9900",
+    red:"#CC0033"
+};
+
+/* FETCH WARNINGS */
+
+async function fetchWarnings(){
+
+    try{
+
+        const response = await fetch(API_URL);
+        const data = await response.json();
+
+        const features = data.features || [];
+
+        let counts = {
+            yellow:0,
+            amber:0,
+            red:0
+        };
+
+        let highest = null;
+
+        const priority = ["RED","AMBER","YELLOW"];
+
+        for(const f of features){
+
+            const w = f.attributes;
+
+            const level = (w.warninglevel || "").toUpperCase();
+
+            if(level === "YELLOW") counts.yellow++;
+            if(level === "AMBER") counts.amber++;
+            if(level === "RED") counts.red++;
+
+            if(!highest){
+                highest = w;
+                continue;
+            }
+
+            const currentIndex = priority.indexOf(level);
+            const highestIndex = priority.indexOf((highest.warninglevel || "").toUpperCase());
+
+            if(currentIndex !== -1 && (highestIndex === -1 || currentIndex < highestIndex)){
+                highest = w;
+            }
+
+        }
+
+        updateGraphics(highest, counts);
+
+    }
+    catch(err){
+        console.error("Warning fetch failed:", err);
+    }
+
+}
+
+/* UPDATE GRAPHICS */
+
+function updateGraphics(warning, counts){
+
+    if(!warning) return;
+
+    document.getElementById("warningLevel").textContent = warning.warninglevel;
+    document.getElementById("warningType").textContent = warning.weathertype + " ";
+
+    document.getElementById("validFrom").textContent = warning.validFromDateString;
+    document.getElementById("validTo").textContent = warning.validToDateString;
+
+    document.getElementById("yellowCount").textContent = counts.yellow;
+    document.getElementById("amberCount").textContent = counts.amber;
+    document.getElementById("redCount").textContent = counts.red;
+
+    document.getElementById("warningTimes").style.background =
+        levelColour[(warning.warninglevel || "").toLowerCase()] || "#777";
+    document.getElementById("warningTitle").classList = warning.warninglevel.toLowerCase() + "-dark"
+    document.getElementById("warningTimes").style.color =
+        (levelColour[(warning.warninglevel || "").toLowerCase()] == "#FFE923") ? "#000" : "#FFF";
+
+}
+
+/* LIVE CLOCK */
+
+function updateClock(){
+
+    const now = new Date();
+
+    const time = now.toLocaleTimeString("en-GB",{
+        hour12:false,
+        timeZone:"Europe/London"
+    });
+
+    const zone = now.toLocaleTimeString("en-GB",{
+        timeZoneName:"short",
+        timeZone:"Europe/London"
+    }).split(" ").pop();
+
+    document.getElementById("time").textContent = time + " " + zone;
+
+}
+
+setInterval(updateClock,1000);
+updateClock();
+
+/* INITIAL LOAD */
+
+fetchWarnings();
+
+/* REFRESH WARNINGS EVERY 5 MINUTES */
+
+setInterval(fetchWarnings,10000);
+
+</script>
+
+</body>
+</html>
